@@ -1,14 +1,19 @@
 const express = require("express");
 const router = express.Router();
+
+const { protect, adminOnly } = require("../middleware/authMiddleware");
 const {
-  registerForEvent,
+  createRegistration,
   getMyRegistrations,
+  cancelRegistration,
   getAllRegistrations,
 } = require("../controllers/registrationController");
-const { protect, admin } = require("../middleware/authMiddleware");
 
-router.post("/:eventId", protect, registerForEvent);
-router.get("/my", protect, getMyRegistrations);
-router.get("/", protect, admin, getAllRegistrations);
+router.use(protect);
+
+router.get("/me", getMyRegistrations);
+router.get("/", adminOnly, getAllRegistrations);
+router.post("/", createRegistration);
+router.delete("/:id", cancelRegistration);
 
 module.exports = router;

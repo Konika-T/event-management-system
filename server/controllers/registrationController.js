@@ -1,61 +1,90 @@
-const Registration = require("../models/Registration");
+const mongoose = require("mongoose");
 const Event = require("../models/Event");
+const Registration = require("../models/Registration");
 
-// @route POST /api/registrations/:eventId
-// User registers for an event
-async function registerForEvent(req, res) {
+// POST /api/registrations
+async function createRegistration(req, res, next) {
   try {
-    const event = await Event.findById(req.params.eventId);
-    if (!event) {
-      return res.status(404).json({ message: "Event not found" });
+    const { eventId } = req.body;
+
+    if (typeof eventId !== "string" || !mongoose.isValidObjectId(eventId)) {
+      return res.status(400).json({ message: "A valid eventId is required" });
     }
 
-    const alreadyRegistered = await Registration.findOne({
-      user: req.user._id,
-      event: event._id,
-    });
+    const event = await Event.findById(eventId);
+    if (!event) return res.status(404).json({ message: "Event not found" });
 
-    if (alreadyRegistered) {
-      return res.status(400).json({ message: "Already registered for this event" });
+    try {
+      const registration = await Registration.create({ user: req.user._id, event: event._id });
+      await registration.populate([
+        { path: "event", select: "title description date time location" },
+        { path: "user", select: "name email" },
+      ]);
+      return res.status(201).json({ message: "Registered for event successfully", registration });
+    } catch (error) {
+      if (error.code === 11000) {
+        return res.status(409).json({ message: "You are already registered for this event" });
+      }
+      throw error;
     }
-
-    const registration = await Registration.create({
-      user: req.user._id,
-      event: event._id,
-    });
-
-    res.status(201).json(registration);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    next(error);
   }
 }
 
-// @route GET /api/registrations/my
-// Logged-in user's own registrations, populated with event details
-async function getMyRegistrations(req, res) {
+// GET /api/registrations/me
+async function getMyRegistrations(req, res, next) {
   try {
-    const registrations = await Registration.find({ user: req.user._id }).populate("event");
-    res.json(registrations);
+    const registrations = await Registration.find({ user: req.user._id })
+      .populate("event", "title description date time location")
+      .sort({ createdAt: -1 })
+      .lean();
+
+    res.status(200).json({ registrations });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    next(error);
   }
 }
 
-// @route GET /api/registrations
-// Admin only - view all registrations across all events
-async function getAllRegistrations(req, res) {
+// DELETE /api/registrations/:id (own registration only)
+async function cancelRegistration(req, res, next) {
+  try {
+    if (!mongoose.isValidObjectId(req.params.id)) {
+      return res.status(400).json({ message: "Invalid registration ID" });
+    }
+
+    const registration = await Registration.findOneAndDelete({
+      _id: req.params.id,
+      user: req.user._id,
+    });
+    if (!registration) {
+      return res.status(404).json({ message: "Registration not found for this user" });
+    }
+
+    res.status(200).json({ message: "Registration cancelled successfully" });
+  } catch (error) {
+    next(error);
+  }
+}
+
+// GET /api/registrations (admin only, enforced in the route)
+async function getAllRegistrations(req, res, next) {
   try {
     const registrations = await Registration.find()
-      .populate("event")
-      .populate("user", "name email");
-    res.json(registrations);
+      .populate("user", "name email role")
+      .populate("event", "title description date time location")
+      .sort({ createdAt: -1 })
+      .lean();
+
+    res.status(200).json({ registrations });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    next(error);
   }
 }
 
 module.exports = {
-  registerForEvent,
+  createRegistration,
   getMyRegistrations,
+  cancelRegistration,
   getAllRegistrations,
 };

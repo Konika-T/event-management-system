@@ -4,32 +4,36 @@ const eventSchema = new mongoose.Schema(
   {
     title: {
       type: String,
-      required: true,
+      required: [true, "Event title is required"],
+      trim: true,
     },
+
     description: {
       type: String,
-      required: true,
+      required: [true, "Event description is required"],
+      trim: true,
     },
+
     date: {
-      type: String,
-      required: true,
+      type: Date,
+      required: [true, "Event date is required"],
     },
+
+    time: {
+      type: String,
+      required: [true, "Event time is required"],
+      trim: true,
+    },
+
     location: {
       type: String,
-      required: true,
-    },
-    status: {
-      type: String,
-      enum: ["Open", "Closed"],
-      default: "Open",
-    },
-    createdBy: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      required: true,
+      required: [true, "Event location is required"],
+      trim: true,
     },
   },
-  { timestamps: true }
+  {
+    timestamps: true,
+  }
 );
 
 module.exports = mongoose.model("Event", eventSchema);

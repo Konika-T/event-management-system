@@ -1,36 +1,70 @@
 const jwt = require("jsonwebtoken");
 const User = require("../models/User");
 
-// Verifies the JWT and attaches the user to req.user
+// Verifies the JWT and loads the current user.
 async function protect(req, res, next) {
-  let token;
+  try {
+    const authorization = req.headers.authorization;
 
-  if (req.headers.authorization && req.headers.authorization.startsWith("Bearer")) {
-    try {
-      token = req.headers.authorization.split(" ")[1];
-      const decoded = jwt.verify(token, process.env.JWT_SECRET);
-      req.user = await User.findById(decoded.id).select("-password");
-
-      if (!req.user) {
-        return res.status(401).json({ message: "User not found" });
-      }
-
-      next();
-    } catch (error) {
-      return res.status(401).json({ message: "Not authorized, token failed" });
+    if (!authorization || !authorization.startsWith("Bearer ")) {
+      return res.status(401).json({
+        message: "Authentication required. Please log in.",
+      });
     }
-  } else {
-    return res.status(401).json({ message: "Not authorized, no token" });
-  }
-}
 
-// Only allows admins through. Use after protect().
-function admin(req, res, next) {
-  if (req.user && req.user.role === "admin") {
+    const token = authorization.split(" ")[1];
+
+    if (!token) {
+      return res.status(401).json({
+        message: "Authentication token is missing",
+      });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET, {
+      algorithms: ["HS256"],
+    });
+
+    const user = await User.findById(decoded.userId);
+
+    if (!user) {
+      return res.status(401).json({
+        message: "User no longer exists",
+      });
+    }
+
+    // The role comes from MongoDB, not from client input.
+    req.user = user;
     next();
-  } else {
-    res.status(403).json({ message: "Not authorized as an admin" });
+  } catch (error) {
+    if (
+      error.name === "JsonWebTokenError" ||
+      error.name === "TokenExpiredError" ||
+      error.name === "NotBeforeError"
+    ) {
+      return res.status(401).json({
+        message: "Invalid or expired token. Please log in again.",
+      });
+    }
+
+    console.error("Authentication error:", error.message);
+    return res.status(500).json({
+      message: "Authentication could not be completed",
+    });
   }
 }
 
-module.exports = { protect, admin };
+// Allows only administrators.
+function adminOnly(req, res, next) {
+  if (!req.user || req.user.role !== "admin") {
+    return res.status(403).json({
+      message: "Access denied. Admin permission required.",
+    });
+  }
+
+  next();
+}
+
+module.exports = {
+  protect,
+  adminOnly,
+};

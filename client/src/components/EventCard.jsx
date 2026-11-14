@@ -21,7 +21,13 @@ function EventCard({
       </p>
 
       <p className="mt-3 text-slate-600">
-        Date: {date}
+        Date:{" "}
+        {new Date(date).toLocaleDateString("en-IN", {
+          timeZone: "UTC",
+          day: "2-digit",
+          month: "long",
+          year: "numeric",
+        })}
       </p>
 
       <p className="text-slate-600">
