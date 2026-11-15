@@ -1,45 +1,47 @@
-const API_BASE = "/api";
-
-async function apiRequest(path, options = {}) {
-  const token = localStorage.getItem("eventHubToken");
-  const headers = new Headers(options.headers || {});
-
-  if (options.body && !headers.has("Content-Type")) {
-    headers.set("Content-Type", "application/json");
-  }
-  if (token && !headers.has("Authorization")) {
-    headers.set("Authorization", `Bearer ${token}`);
-  }
-
-  let response;
-  try {
-    response = await fetch(`${API_BASE}${path}`, { ...options, headers });
-  } catch {
-    throw new Error("Could not reach the server. Check that the backend is running.");
-  }
-
-  const data = await response.json().catch(() => ({}));
-
-  if (!response.ok) {
-    const error = new Error(data.message || `Request failed (${response.status})`);
-    error.status = response.status;
-    throw error;
-  }
-
-  return data;
-}
+// Locally VITE_API_URL is empty, so requests go to /api and the Vite proxy handles them.
+// On Vercel, VITE_API_URL is set to the Render backend URL.
+const API_BASE_URL = `${import.meta.env.VITE_API_URL || ""}/api`;
 
 function jsonBody(data) {
   return JSON.stringify(data);
 }
 
+async function apiRequest(path, options = {}) {
+  const token = localStorage.getItem("eventHubToken");
+
+  const headers = {
+    ...(options.body ? { "Content-Type": "application/json" } : {}),
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...options.headers,
+  };
+
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    ...options,
+    headers,
+  });
+
+  const data = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    throw new Error(data.message || "Request failed");
+  }
+
+  return data;
+}
+
 // Auth
 export function registerUser(userData) {
-  return apiRequest("/auth/register", { method: "POST", body: jsonBody(userData) });
+  return apiRequest("/auth/register", {
+    method: "POST",
+    body: jsonBody(userData),
+  });
 }
 
 export function loginUser(credentials) {
-  return apiRequest("/auth/login", { method: "POST", body: jsonBody(credentials) });
+  return apiRequest("/auth/login", {
+    method: "POST",
+    body: jsonBody(credentials),
+  });
 }
 
 export function getCurrentUser() {
